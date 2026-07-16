@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,6 +22,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -39,6 +41,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tecnozoni.reproductor.data.model.Song
 import com.tecnozoni.reproductor.data.model.SortOrder
@@ -83,6 +87,17 @@ fun SongListScreen(
         if (hasPermission) viewModel.loadSongs()
     }
 
+    // Cada vez que la app vuelve al frente re-consultamos MediaStore, así aparecen
+    // las canciones nuevas sin tener que cerrar y abrir la app.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        val granted = ContextCompat.checkSelfPermission(context, audioPermission) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            hasPermission = true
+            viewModel.loadSongs()
+        }
+    }
+
     if (!hasPermission) {
         PermissionGate(
             onRequest = { permissionLauncher.launch(audioPermission) },
@@ -101,6 +116,7 @@ fun SongListScreen(
     SongListContent(
         uiState = uiState,
         onSortSelected = viewModel::setSort,
+        onRefresh = viewModel::loadSongs,
         modifier = modifier,
     )
 }
@@ -110,6 +126,7 @@ fun SongListScreen(
 private fun SongListContent(
     uiState: SongListUiState,
     onSortSelected: (SortOrder) -> Unit,
+    onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -117,7 +134,10 @@ private fun SongListContent(
         topBar = {
             TopAppBar(
                 title = { Text("Reproductor") },
-                actions = { SortMenu(current = uiState.sort, onSortSelected = onSortSelected) },
+                actions = {
+                    TextButton(onClick = onRefresh) { Text("Actualizar") }
+                    SortMenu(current = uiState.sort, onSortSelected = onSortSelected)
+                },
             )
         },
     ) { innerPadding ->
@@ -127,9 +147,11 @@ private fun SongListContent(
                 .padding(innerPadding),
         ) {
             when {
-                uiState.isLoading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                // Spinner a pantalla completa solo en la carga INICIAL (lista vacía).
+                uiState.isLoading && uiState.songs.isEmpty() ->
+                    CircularProgressIndicator(Modifier.align(Alignment.Center))
 
-                uiState.error != null -> CenteredMessage(
+                uiState.error != null && uiState.songs.isEmpty() -> CenteredMessage(
                     text = "No se pudieron leer las canciones:\n${uiState.error}",
                 )
 
@@ -137,15 +159,21 @@ private fun SongListContent(
                     text = "No se encontraron canciones en el dispositivo.",
                 )
 
-                else -> SongList(songs = uiState.songs)
+                else -> Column(modifier = Modifier.fillMaxSize()) {
+                    // Barra fina de progreso durante un refresh (la lista sigue visible).
+                    if (uiState.isLoading) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    SongList(songs = uiState.songs, modifier = Modifier.weight(1f))
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SongList(songs: List<Song>) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+private fun SongList(songs: List<Song>, modifier: Modifier = Modifier) {
+    LazyColumn(modifier = modifier.fillMaxSize()) {
         items(items = songs, key = { it.id }) { song ->
             SongRow(
                 song = song,
