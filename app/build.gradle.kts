@@ -69,6 +69,9 @@ dependencies {
     // Drag & drop sobre LazyColumn (orden personalizado)
     implementation(libs.reorderable)
 
+    // Lectura de tags ID3 crudos (recuperar títulos que MediaStore devuelve rotos)
+    implementation(libs.jaudiotagger)
+
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

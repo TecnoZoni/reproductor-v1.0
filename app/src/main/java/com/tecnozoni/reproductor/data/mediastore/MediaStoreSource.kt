@@ -32,6 +32,7 @@ class MediaStoreSource @Inject constructor(
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DATE_MODIFIED,
+            @Suppress("DEPRECATION") MediaStore.Audio.Media.DATA, // ruta del archivo (para leer tags crudos)
         )
 
         // Solo música (excluye tonos, notificaciones, grabaciones, etc.).
@@ -52,26 +53,35 @@ class MediaStoreSource @Inject constructor(
             val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
             val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+            @Suppress("DEPRECATION")
+            val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
+                val path = cursor.getString(dataCol)
 
-                // TITLE puede venir null/vacío, o "roto" (mojibake: tags en codificación
-                // vieja que Android decodificó mal → contiene el carácter '�' �).
-                // En cualquiera de esos casos caemos al nombre de archivo, y si no, a genérico.
-                val rawTitle = cursor.getString(titleCol)?.takeIf { it.isUsable() }
-                val fileName = cursor.getString(displayNameCol)?.substringBeforeLast('.')
-                val title = rawTitle ?: fileName?.takeIf { it.isNotBlank() } ?: "(sin título)"
-
-                // MediaStore usa el literal "<unknown>" cuando no conoce el artista.
-                val artist = cursor.getString(artistCol)
+                // Valores de MediaStore, descartando null/vacío/mojibake ('�') y "<unknown>".
+                var title = cursor.getString(titleCol)?.takeIf { it.isUsable() }
+                var artist = cursor.getString(artistCol)
                     ?.takeIf { it.isUsable() && it != MediaStore.UNKNOWN_STRING }
-                    ?: "Artista desconocido"
+
+                // Si MediaStore devolvió título/artista rotos, leemos los tags CRUDOS del
+                // archivo (donde el dato original sigue intacto). Solo para los rotos → barato.
+                if ((title == null || artist == null) && !path.isNullOrBlank()) {
+                    val tags = com.tecnozoni.reproductor.data.tags.TagReader.read(path)
+                    if (title == null) title = tags?.title?.takeIf { it.isUsable() }
+                    if (artist == null) artist = tags?.artist?.takeIf { it.isUsable() }
+                }
+
+                // Últimos recursos: nombre de archivo para el título, genérico para el artista.
+                val fileName = cursor.getString(displayNameCol)?.substringBeforeLast('.')
+                val finalTitle = title ?: fileName?.takeIf { it.isNotBlank() } ?: "(sin título)"
+                val finalArtist = artist ?: "Artista desconocido"
 
                 songs += Song(
                     id = id,
-                    title = title,
-                    artist = artist,
+                    title = finalTitle,
+                    artist = finalArtist,
                     durationMs = cursor.getLong(durationCol),
                     dateModifiedSec = cursor.getLong(dateCol),
                     uri = ContentUris.withAppendedId(collection, id),
