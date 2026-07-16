@@ -58,6 +58,12 @@ class SongListViewModel @Inject constructor(
         playbackController.togglePlayPause()
     }
 
+    fun next() = playbackController.next()
+
+    fun previous() = playbackController.previous()
+
+    fun seekTo(positionMs: Long) = playbackController.seekTo(positionMs)
+
     /** Se llama una vez que el permiso está concedido. */
     fun loadSongs() {
         if (_uiState.value.isLoading) return

@@ -27,6 +27,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,6 +52,7 @@ import com.tecnozoni.reproductor.data.model.Song
 import com.tecnozoni.reproductor.data.model.SortOrder
 import com.tecnozoni.reproductor.playback.PlaybackState
 import com.tecnozoni.reproductor.ui.songlist.components.SongRow
+import com.tecnozoni.reproductor.ui.songlist.components.formatDuration
 
 /**
  * Pantalla única. Primero resuelve el permiso de lectura de audio (que cambia
@@ -125,6 +127,9 @@ fun SongListScreen(
         onRefresh = viewModel::loadSongs,
         onSongClick = viewModel::play,
         onTogglePlayPause = viewModel::togglePlayPause,
+        onNext = viewModel::next,
+        onPrevious = viewModel::previous,
+        onSeek = viewModel::seekTo,
         modifier = modifier,
     )
 }
@@ -138,6 +143,9 @@ private fun SongListContent(
     onRefresh: () -> Unit,
     onSongClick: (Int) -> Unit,
     onTogglePlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -153,7 +161,13 @@ private fun SongListContent(
         },
         bottomBar = {
             if (playbackState.hasCurrent) {
-                MiniPlayer(state = playbackState, onTogglePlayPause = onTogglePlayPause)
+                PlayerBar(
+                    state = playbackState,
+                    onTogglePlayPause = onTogglePlayPause,
+                    onNext = onNext,
+                    onPrevious = onPrevious,
+                    onSeek = onSeek,
+                )
             }
         },
     ) { innerPadding ->
@@ -208,40 +222,81 @@ private fun SongList(
     }
 }
 
-/** Barra inferior con la canción actual y el botón play/pausa. */
+/** Barra inferior de reproducción: canción actual, progreso arrastrable y controles. */
 @Composable
-private fun MiniPlayer(
+private fun PlayerBar(
     state: PlaybackState,
     onTogglePlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onSeek: (Long) -> Unit,
 ) {
+    // Mientras el usuario arrastra, mostramos su valor local; recién al soltar hacemos seek.
+    var dragMs by remember { mutableStateOf<Float?>(null) }
+    val duration = state.durationMs.coerceAtLeast(0L)
+    val shownMs = dragMs?.toLong() ?: state.positionMs
+
     Surface(tonalElevation = 3.dp) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                // Empuja el contenido arriba de la barra de navegación del sistema
-                // (el fondo del Surface sí llega hasta el borde, se ve prolijo).
+                // Empuja el contenido arriba de la barra de navegación del sistema.
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = state.currentTitle ?: "",
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+            )
+            Text(
+                text = state.currentArtist ?: "",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+
+            Slider(
+                value = shownMs.toFloat(),
+                onValueChange = { dragMs = it },
+                onValueChangeFinished = {
+                    dragMs?.let { onSeek(it.toLong()) }
+                    dragMs = null
+                },
+                valueRange = 0f..duration.coerceAtLeast(1L).toFloat(),
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    text = state.currentTitle ?: "",
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                )
-                Text(
-                    text = state.currentArtist ?: "",
-                    style = MaterialTheme.typography.bodySmall,
+                    text = formatDuration(shownMs),
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
                 )
-            }
-            TextButton(onClick = onTogglePlayPause) {
-                // ⏸ pausa / ▶ reproducir (símbolos Unicode, sin librería de íconos).
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = onPrevious) {
+                        Text("⏮", style = MaterialTheme.typography.headlineSmall)
+                    }
+                    TextButton(onClick = onTogglePlayPause) {
+                        Text(
+                            text = if (state.isPlaying) "⏸" else "▶",
+                            style = MaterialTheme.typography.headlineMedium,
+                        )
+                    }
+                    TextButton(onClick = onNext) {
+                        Text("⏭", style = MaterialTheme.typography.headlineSmall)
+                    }
+                }
                 Text(
-                    text = if (state.isPlaying) "⏸" else "▶",
-                    style = MaterialTheme.typography.headlineSmall,
+                    text = formatDuration(duration),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
