@@ -7,6 +7,7 @@ import android.util.Size
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -21,21 +22,20 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tecnozoni.reproductor.data.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Collections
 
-// Caché en memoria del arte ya cargado (evita releer el archivo al scrollear).
+// Caché en memoria del arte chico (fila) ya cargado (evita releer al scrollear).
 private val artworkCache = LruCache<Long, ImageBitmap>(200)
 // IDs que ya sabemos que NO tienen arte, para no reintentar en cada recomposición.
 private val noArtworkIds = Collections.synchronizedSet(mutableSetOf<Long>())
 
-/**
- * Muestra la carátula embebida de la canción, o un placeholder por default si no tiene.
- * Carga async con loadThumbnail (API 29+), que extrae el arte embebido del archivo.
- */
+/** Carátula chica para las filas de la lista (48dp, con caché). */
 @Composable
 fun SongArtwork(song: Song, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -45,47 +45,75 @@ fun SongArtwork(song: Song, modifier: Modifier = Modifier) {
         key1 = song.id,
     ) {
         if (value == null && song.id !in noArtworkIds) {
-            value = loadArtwork(context, song.uri, song.id)
+            val bitmap = decodeThumbnail(context, song.uri, sizePx = 128)
+            if (bitmap != null) artworkCache.put(song.id, bitmap) else noArtworkIds.add(song.id)
+            value = bitmap
         }
     }
 
+    ArtBox(
+        image = artwork,
+        cornerRadius = 6.dp,
+        placeholderStyle = MaterialTheme.typography.titleLarge,
+        modifier = modifier.size(48.dp),
+    )
+}
+
+/** Carátula grande para la pantalla de reproducción completa (sin caché, 1 por canción). */
+@Composable
+fun PlayerArtwork(uri: Uri?, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+
+    val artwork by produceState<ImageBitmap?>(initialValue = null, key1 = uri) {
+        value = if (uri != null) decodeThumbnail(context, uri, sizePx = 512) else null
+    }
+
+    ArtBox(
+        image = artwork,
+        cornerRadius = 16.dp,
+        placeholderStyle = MaterialTheme.typography.displayLarge,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun ArtBox(
+    image: ImageBitmap?,
+    cornerRadius: Dp,
+    placeholderStyle: TextStyle,
+    modifier: Modifier = Modifier,
+) {
     Box(
         modifier = modifier
-            .size(48.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(cornerRadius))
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
-        val art = artwork
-        if (art != null) {
+        if (image != null) {
             Image(
-                bitmap = art,
+                bitmap = image,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.fillMaxSize(),
             )
         } else {
-            // Placeholder por default: nota musical sobre fondo neutro.
             Text(
                 text = "♪",
-                style = MaterialTheme.typography.titleLarge,
+                style = placeholderStyle,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 }
 
-private suspend fun loadArtwork(context: Context, uri: Uri, id: Long): ImageBitmap? =
+/** Extrae el arte embebido del archivo vía loadThumbnail (API 29+). null si no tiene. */
+private suspend fun decodeThumbnail(context: Context, uri: Uri, sizePx: Int): ImageBitmap? =
     withContext(Dispatchers.IO) {
         try {
-            val image = context.contentResolver
-                .loadThumbnail(uri, Size(128, 128), null)
+            context.contentResolver
+                .loadThumbnail(uri, Size(sizePx, sizePx), null)
                 .asImageBitmap()
-            artworkCache.put(id, image)
-            image
         } catch (e: Exception) {
-            // Sin arte embebido (o el device no lo pudo extraer): lo marcamos y mostramos placeholder.
-            noArtworkIds.add(id)
             null
         }
     }

@@ -13,7 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import com.tecnozoni.reproductor.ui.songlist.SongListScreen
+import com.tecnozoni.reproductor.ui.ReproductorNavHost
 import com.tecnozoni.reproductor.ui.theme.ReproductorTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    SongListScreen()
+                    ReproductorNavHost()
                 }
             }
         }

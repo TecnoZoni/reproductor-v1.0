@@ -8,6 +8,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,8 +52,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tecnozoni.reproductor.data.model.Song
 import com.tecnozoni.reproductor.data.model.SortOrder
 import com.tecnozoni.reproductor.playback.PlaybackState
+import com.tecnozoni.reproductor.ui.songlist.components.RepeatButton
+import com.tecnozoni.reproductor.ui.songlist.components.ShuffleButton
 import com.tecnozoni.reproductor.ui.songlist.components.SongRow
-import com.tecnozoni.reproductor.ui.songlist.components.formatDuration
 
 /**
  * Pantalla única. Primero resuelve el permiso de lectura de audio (que cambia
@@ -60,6 +62,7 @@ import com.tecnozoni.reproductor.ui.songlist.components.formatDuration
  */
 @Composable
 fun SongListScreen(
+    onOpenPlayer: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SongListViewModel = hiltViewModel(),
 ) {
@@ -130,6 +133,9 @@ fun SongListScreen(
         onNext = viewModel::next,
         onPrevious = viewModel::previous,
         onSeek = viewModel::seekTo,
+        onToggleShuffle = viewModel::toggleShuffle,
+        onCycleRepeat = viewModel::cycleRepeat,
+        onOpenPlayer = onOpenPlayer,
         modifier = modifier,
     )
 }
@@ -146,6 +152,9 @@ private fun SongListContent(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSeek: (Long) -> Unit,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeat: () -> Unit,
+    onOpenPlayer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -167,6 +176,9 @@ private fun SongListContent(
                     onNext = onNext,
                     onPrevious = onPrevious,
                     onSeek = onSeek,
+                    onToggleShuffle = onToggleShuffle,
+                    onCycleRepeat = onCycleRepeat,
+                    onOpenPlayer = onOpenPlayer,
                 )
             }
         },
@@ -230,6 +242,9 @@ private fun PlayerBar(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSeek: (Long) -> Unit,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeat: () -> Unit,
+    onOpenPlayer: () -> Unit,
 ) {
     // Mientras el usuario arrastra, mostramos su valor local; recién al soltar hacemos seek.
     var dragMs by remember { mutableStateOf<Float?>(null) }
@@ -244,17 +259,25 @@ private fun PlayerBar(
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
-            Text(
-                text = state.currentTitle ?: "",
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-            )
-            Text(
-                text = state.currentArtist ?: "",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
+            // Tocar el título/artista abre la pantalla de reproducción completa.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenPlayer)
+                    .padding(vertical = 4.dp),
+            ) {
+                Text(
+                    text = state.currentTitle ?: "",
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                )
+                Text(
+                    text = state.currentArtist ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
 
             Slider(
                 value = shownMs.toFloat(),
@@ -268,36 +291,23 @@ private fun PlayerBar(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = formatDuration(shownMs),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = onPrevious) {
-                        Text("⏮", style = MaterialTheme.typography.headlineSmall)
-                    }
-                    TextButton(onClick = onTogglePlayPause) {
-                        Text(
-                            text = if (state.isPlaying) "⏸" else "▶",
-                            style = MaterialTheme.typography.headlineMedium,
-                        )
-                    }
-                    TextButton(onClick = onNext) {
-                        Text("⏭", style = MaterialTheme.typography.headlineSmall)
-                    }
+                ShuffleButton(enabled = state.shuffleEnabled, onClick = onToggleShuffle)
+                TextButton(onClick = onPrevious) {
+                    Text("⏮", style = MaterialTheme.typography.headlineSmall)
                 }
-                Text(
-                    text = formatDuration(duration),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                TextButton(onClick = onTogglePlayPause) {
+                    Text(
+                        text = if (state.isPlaying) "⏸" else "▶",
+                        style = MaterialTheme.typography.headlineMedium,
+                    )
+                }
+                TextButton(onClick = onNext) {
+                    Text("⏭", style = MaterialTheme.typography.headlineSmall)
+                }
+                RepeatButton(repeatMode = state.repeatMode, onClick = onCycleRepeat)
             }
         }
     }
