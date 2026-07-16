@@ -28,6 +28,7 @@ class MediaStoreSource @Inject constructor(
         val projection = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.DISPLAY_NAME, // nombre de archivo, fallback si no hay TITLE
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DATE_MODIFIED,
@@ -47,16 +48,30 @@ class MediaStoreSource @Inject constructor(
         )?.use { cursor ->
             val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
             val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+            val displayNameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
             val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
             val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
+
+                // TITLE puede venir null/vacío en archivos sin metadata: caemos al
+                // nombre de archivo (sin extensión) y, si tampoco hay, a un texto genérico.
+                val rawTitle = cursor.getString(titleCol)?.takeIf { it.isNotBlank() }
+                val fileName = cursor.getString(displayNameCol)?.substringBeforeLast('.')
+                val title = rawTitle ?: fileName?.takeIf { it.isNotBlank() } ?: "(sin título)"
+
+                val rawArtist = cursor.getString(artistCol)?.takeIf { it.isNotBlank() }
+                // MediaStore usa el literal "<unknown>" cuando no conoce el artista.
+                val artist = rawArtist
+                    ?.takeIf { it != MediaStore.UNKNOWN_STRING }
+                    ?: "Artista desconocido"
+
                 songs += Song(
                     id = id,
-                    title = cursor.getString(titleCol) ?: "",
-                    artist = cursor.getString(artistCol) ?: "",
+                    title = title,
+                    artist = artist,
                     durationMs = cursor.getLong(durationCol),
                     dateModifiedSec = cursor.getLong(dateCol),
                     uri = ContentUris.withAppendedId(collection, id),
