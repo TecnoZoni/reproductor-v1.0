@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.tecnozoni.reproductor.data.SongRepository
 import com.tecnozoni.reproductor.data.model.Song
 import com.tecnozoni.reproductor.data.model.SortOrder
+import com.tecnozoni.reproductor.playback.PlaybackController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,12 +33,30 @@ data class SongListUiState(
 @HiltViewModel
 class SongListViewModel @Inject constructor(
     private val repository: SongRepository,
+    private val playbackController: PlaybackController,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SongListUiState())
     val uiState: StateFlow<SongListUiState> = _uiState.asStateFlow()
 
+    /** Estado de reproducción para el mini-player. */
+    val playbackState = playbackController.state
+
     private var allSongs: List<Song> = emptyList()
+
+    init {
+        // Conecta la UI con el servicio de reproducción (idempotente).
+        playbackController.initialize()
+    }
+
+    /** Reproduce la lista actual empezando por la canción tocada. */
+    fun play(index: Int) {
+        playbackController.playSongs(_uiState.value.songs, index)
+    }
+
+    fun togglePlayPause() {
+        playbackController.togglePlayPause()
+    }
 
     /** Se llama una vez que el permiso está concedido. */
     fun loadSongs() {

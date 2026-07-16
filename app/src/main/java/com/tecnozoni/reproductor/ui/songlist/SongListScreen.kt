@@ -11,11 +11,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -25,6 +26,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -46,6 +48,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tecnozoni.reproductor.data.model.Song
 import com.tecnozoni.reproductor.data.model.SortOrder
+import com.tecnozoni.reproductor.playback.PlaybackState
 import com.tecnozoni.reproductor.ui.songlist.components.SongRow
 
 /**
@@ -59,6 +62,7 @@ fun SongListScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val playbackState by viewModel.playbackState.collectAsStateWithLifecycle()
 
     // Permiso correcto según versión: API 33+ = READ_MEDIA_AUDIO; 29-32 = READ_EXTERNAL_STORAGE.
     val audioPermission = remember {
@@ -115,8 +119,11 @@ fun SongListScreen(
 
     SongListContent(
         uiState = uiState,
+        playbackState = playbackState,
         onSortSelected = viewModel::setSort,
         onRefresh = viewModel::loadSongs,
+        onSongClick = viewModel::play,
+        onTogglePlayPause = viewModel::togglePlayPause,
         modifier = modifier,
     )
 }
@@ -125,8 +132,11 @@ fun SongListScreen(
 @Composable
 private fun SongListContent(
     uiState: SongListUiState,
+    playbackState: PlaybackState,
     onSortSelected: (SortOrder) -> Unit,
     onRefresh: () -> Unit,
+    onSongClick: (Int) -> Unit,
+    onTogglePlayPause: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -139,6 +149,11 @@ private fun SongListContent(
                     SortMenu(current = uiState.sort, onSortSelected = onSortSelected)
                 },
             )
+        },
+        bottomBar = {
+            if (playbackState.hasCurrent) {
+                MiniPlayer(state = playbackState, onTogglePlayPause = onTogglePlayPause)
+            }
         },
     ) { innerPadding ->
         Box(
@@ -164,7 +179,11 @@ private fun SongListContent(
                     if (uiState.isLoading) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
-                    SongList(songs = uiState.songs, modifier = Modifier.weight(1f))
+                    SongList(
+                        songs = uiState.songs,
+                        onSongClick = onSongClick,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
         }
@@ -172,14 +191,55 @@ private fun SongListContent(
 }
 
 @Composable
-private fun SongList(songs: List<Song>, modifier: Modifier = Modifier) {
+private fun SongList(
+    songs: List<Song>,
+    onSongClick: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     LazyColumn(modifier = modifier.fillMaxSize()) {
-        items(items = songs, key = { it.id }) { song ->
+        itemsIndexed(items = songs, key = { _, song -> song.id }) { index, song ->
             SongRow(
                 song = song,
-                onClick = { /* Hito 2: reproducir */ },
+                onClick = { onSongClick(index) },
             )
             HorizontalDivider()
+        }
+    }
+}
+
+/** Barra inferior con la canción actual y el botón play/pausa. */
+@Composable
+private fun MiniPlayer(
+    state: PlaybackState,
+    onTogglePlayPause: () -> Unit,
+) {
+    Surface(tonalElevation = 3.dp) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = state.currentTitle ?: "",
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                )
+                Text(
+                    text = state.currentArtist ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+            TextButton(onClick = onTogglePlayPause) {
+                // ⏸ pausa / ▶ reproducir (símbolos Unicode, sin librería de íconos).
+                Text(
+                    text = if (state.isPlaying) "⏸" else "▶",
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+            }
         }
     }
 }
