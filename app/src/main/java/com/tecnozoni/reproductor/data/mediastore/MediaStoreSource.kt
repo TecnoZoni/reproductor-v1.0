@@ -56,16 +56,16 @@ class MediaStoreSource @Inject constructor(
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
 
-                // TITLE puede venir null/vacío en archivos sin metadata: caemos al
-                // nombre de archivo (sin extensión) y, si tampoco hay, a un texto genérico.
-                val rawTitle = cursor.getString(titleCol)?.takeIf { it.isNotBlank() }
+                // TITLE puede venir null/vacío, o "roto" (mojibake: tags en codificación
+                // vieja que Android decodificó mal → contiene el carácter '�' �).
+                // En cualquiera de esos casos caemos al nombre de archivo, y si no, a genérico.
+                val rawTitle = cursor.getString(titleCol)?.takeIf { it.isUsable() }
                 val fileName = cursor.getString(displayNameCol)?.substringBeforeLast('.')
                 val title = rawTitle ?: fileName?.takeIf { it.isNotBlank() } ?: "(sin título)"
 
-                val rawArtist = cursor.getString(artistCol)?.takeIf { it.isNotBlank() }
                 // MediaStore usa el literal "<unknown>" cuando no conoce el artista.
-                val artist = rawArtist
-                    ?.takeIf { it != MediaStore.UNKNOWN_STRING }
+                val artist = cursor.getString(artistCol)
+                    ?.takeIf { it.isUsable() && it != MediaStore.UNKNOWN_STRING }
                     ?: "Artista desconocido"
 
                 songs += Song(
@@ -82,3 +82,6 @@ class MediaStoreSource @Inject constructor(
         return songs
     }
 }
+
+/** true si el texto sirve para mostrar: no vacío y sin el carácter de reemplazo '�' (mojibake). */
+private fun String.isUsable(): Boolean = isNotBlank() && !contains('�')
