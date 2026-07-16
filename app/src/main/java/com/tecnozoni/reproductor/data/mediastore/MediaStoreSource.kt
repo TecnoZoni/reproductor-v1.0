@@ -5,6 +5,7 @@ import android.content.Context
 import android.provider.MediaStore
 import com.tecnozoni.reproductor.data.model.Song
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.text.Normalizer
 import javax.inject.Inject
 
 /**
@@ -80,8 +81,8 @@ class MediaStoreSource @Inject constructor(
 
                 songs += Song(
                     id = id,
-                    title = finalTitle,
-                    artist = finalArtist,
+                    title = finalTitle.normalizeDisplay(),
+                    artist = finalArtist.normalizeDisplay(),
                     durationMs = cursor.getLong(durationCol),
                     dateModifiedSec = cursor.getLong(dateCol),
                     uri = ContentUris.withAppendedId(collection, id),
@@ -95,3 +96,11 @@ class MediaStoreSource @Inject constructor(
 
 /** true si el texto sirve para mostrar: no vacío y sin el carácter de reemplazo '�' (mojibake). */
 private fun String.isUsable(): Boolean = isNotBlank() && !contains('�')
+
+/**
+ * Normaliza a letras "normales" los caracteres estilizados de Unicode (p. ej. las
+ * "Mathematical Alphanumeric Symbols" 𝙈𝙊𝙉𝙏𝘼𝙂𝙀𝙈 que usan en redes → MONTAGEM), además
+ * de ancho completo, ligaduras y símbolos de compatibilidad. NFKC NO altera emojis,
+ * tildes ni escrituras legítimas (chino, japonés, etc.) porque no tienen equivalente.
+ */
+private fun String.normalizeDisplay(): String = Normalizer.normalize(this, Normalizer.Form.NFKC)
