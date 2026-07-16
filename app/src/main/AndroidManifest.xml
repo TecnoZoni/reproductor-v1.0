@@ -9,6 +9,13 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
+    <!-- Reproducción en background: foreground service de tipo mediaPlayback.
+         En target 34 SIN esto la app crashea al iniciar el servicio. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Notificación de reproducción (runtime en API 33+). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".ReproductorApp"
         android:allowBackup="true"
@@ -31,6 +38,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Servicio de reproducción. exported=true para que lo controlen el sistema,
+             bluetooth y Android Auto. El intent-filter lo marca como MediaSessionService. -->
+        <service
+            android:name=".playback.PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

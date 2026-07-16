@@ -11,11 +11,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -25,6 +27,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -46,7 +50,9 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tecnozoni.reproductor.data.model.Song
 import com.tecnozoni.reproductor.data.model.SortOrder
+import com.tecnozoni.reproductor.playback.PlaybackState
 import com.tecnozoni.reproductor.ui.songlist.components.SongRow
+import com.tecnozoni.reproductor.ui.songlist.components.formatDuration
 
 /**
  * Pantalla única. Primero resuelve el permiso de lectura de audio (que cambia
@@ -59,6 +65,7 @@ fun SongListScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val playbackState by viewModel.playbackState.collectAsStateWithLifecycle()
 
     // Permiso correcto según versión: API 33+ = READ_MEDIA_AUDIO; 29-32 = READ_EXTERNAL_STORAGE.
     val audioPermission = remember {
@@ -115,8 +122,14 @@ fun SongListScreen(
 
     SongListContent(
         uiState = uiState,
+        playbackState = playbackState,
         onSortSelected = viewModel::setSort,
         onRefresh = viewModel::loadSongs,
+        onSongClick = viewModel::play,
+        onTogglePlayPause = viewModel::togglePlayPause,
+        onNext = viewModel::next,
+        onPrevious = viewModel::previous,
+        onSeek = viewModel::seekTo,
         modifier = modifier,
     )
 }
@@ -125,8 +138,14 @@ fun SongListScreen(
 @Composable
 private fun SongListContent(
     uiState: SongListUiState,
+    playbackState: PlaybackState,
     onSortSelected: (SortOrder) -> Unit,
     onRefresh: () -> Unit,
+    onSongClick: (Int) -> Unit,
+    onTogglePlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -139,6 +158,17 @@ private fun SongListContent(
                     SortMenu(current = uiState.sort, onSortSelected = onSortSelected)
                 },
             )
+        },
+        bottomBar = {
+            if (playbackState.hasCurrent) {
+                PlayerBar(
+                    state = playbackState,
+                    onTogglePlayPause = onTogglePlayPause,
+                    onNext = onNext,
+                    onPrevious = onPrevious,
+                    onSeek = onSeek,
+                )
+            }
         },
     ) { innerPadding ->
         Box(
@@ -164,7 +194,11 @@ private fun SongListContent(
                     if (uiState.isLoading) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
-                    SongList(songs = uiState.songs, modifier = Modifier.weight(1f))
+                    SongList(
+                        songs = uiState.songs,
+                        onSongClick = onSongClick,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
         }
@@ -172,14 +206,99 @@ private fun SongListContent(
 }
 
 @Composable
-private fun SongList(songs: List<Song>, modifier: Modifier = Modifier) {
+private fun SongList(
+    songs: List<Song>,
+    onSongClick: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     LazyColumn(modifier = modifier.fillMaxSize()) {
-        items(items = songs, key = { it.id }) { song ->
+        itemsIndexed(items = songs, key = { _, song -> song.id }) { index, song ->
             SongRow(
                 song = song,
-                onClick = { /* Hito 2: reproducir */ },
+                onClick = { onSongClick(index) },
             )
             HorizontalDivider()
+        }
+    }
+}
+
+/** Barra inferior de reproducción: canción actual, progreso arrastrable y controles. */
+@Composable
+private fun PlayerBar(
+    state: PlaybackState,
+    onTogglePlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onSeek: (Long) -> Unit,
+) {
+    // Mientras el usuario arrastra, mostramos su valor local; recién al soltar hacemos seek.
+    var dragMs by remember { mutableStateOf<Float?>(null) }
+    val duration = state.durationMs.coerceAtLeast(0L)
+    val shownMs = dragMs?.toLong() ?: state.positionMs
+
+    Surface(tonalElevation = 3.dp) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                // Empuja el contenido arriba de la barra de navegación del sistema.
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        ) {
+            Text(
+                text = state.currentTitle ?: "",
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+            )
+            Text(
+                text = state.currentArtist ?: "",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+
+            Slider(
+                value = shownMs.toFloat(),
+                onValueChange = { dragMs = it },
+                onValueChangeFinished = {
+                    dragMs?.let { onSeek(it.toLong()) }
+                    dragMs = null
+                },
+                valueRange = 0f..duration.coerceAtLeast(1L).toFloat(),
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = formatDuration(shownMs),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = onPrevious) {
+                        Text("⏮", style = MaterialTheme.typography.headlineSmall)
+                    }
+                    TextButton(onClick = onTogglePlayPause) {
+                        Text(
+                            text = if (state.isPlaying) "⏸" else "▶",
+                            style = MaterialTheme.typography.headlineMedium,
+                        )
+                    }
+                    TextButton(onClick = onNext) {
+                        Text("⏭", style = MaterialTheme.typography.headlineSmall)
+                    }
+                }
+                Text(
+                    text = formatDuration(duration),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
