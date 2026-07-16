@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.tecnozoni.reproductor"
     compileSdk {
-        version = release(36) {
+        version = release(37) {
             minorApiLevel = 1
         }
     }
@@ -68,6 +68,9 @@ dependencies {
 
     // Drag & drop sobre LazyColumn (orden personalizado)
     implementation(libs.reorderable)
+
+    // Lectura de tags ID3 crudos (recuperar títulos que MediaStore devuelve rotos)
+    implementation(libs.jaudiotagger)
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

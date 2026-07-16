@@ -2,6 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Lectura de audio: API 33+ usa READ_MEDIA_AUDIO. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- API 29-32 usa READ_EXTERNAL_STORAGE (limitado hasta la 32). -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
     <application
         android:name=".ReproductorApp"
         android:allowBackup="true"
