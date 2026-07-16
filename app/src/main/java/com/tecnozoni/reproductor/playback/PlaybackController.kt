@@ -2,6 +2,7 @@ package com.tecnozoni.reproductor.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.net.Uri
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -30,9 +31,13 @@ data class PlaybackState(
     val isPlaying: Boolean = false,
     val currentTitle: String? = null,
     val currentArtist: String? = null,
+    val currentUri: Uri? = null,
     val hasCurrent: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
+    val shuffleEnabled: Boolean = false,
+    // Player.REPEAT_MODE_OFF / REPEAT_MODE_ONE / REPEAT_MODE_ALL
+    val repeatMode: Int = Player.REPEAT_MODE_OFF,
 )
 
 /**
@@ -65,6 +70,8 @@ class PlaybackController @Inject constructor(
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = updateState()
         override fun onPlaybackStateChanged(playbackState: Int) = updateState()
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = updateState()
+        override fun onRepeatModeChanged(repeatMode: Int) = updateState()
     }
 
     fun initialize() {
@@ -114,6 +121,21 @@ class PlaybackController @Inject constructor(
         updateState()
     }
 
+    fun toggleShuffle() {
+        val c = controller ?: return
+        c.shuffleModeEnabled = !c.shuffleModeEnabled
+    }
+
+    /** Cicla OFF -> ALL -> ONE -> OFF. */
+    fun cycleRepeat() {
+        val c = controller ?: return
+        c.repeatMode = when (c.repeatMode) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
+    }
+
     private fun runOrPend(action: (MediaController) -> Unit) {
         val c = controller
         if (c != null) action(c) else pendingAction = action
@@ -142,9 +164,12 @@ class PlaybackController @Inject constructor(
             isPlaying = c.isPlaying,
             currentTitle = metadata?.title?.toString(),
             currentArtist = metadata?.artist?.toString(),
+            currentUri = c.currentMediaItem?.localConfiguration?.uri,
             hasCurrent = c.currentMediaItem != null,
             positionMs = c.currentPosition.coerceAtLeast(0L),
             durationMs = if (rawDuration == C.TIME_UNSET || rawDuration < 0) 0L else rawDuration,
+            shuffleEnabled = c.shuffleModeEnabled,
+            repeatMode = c.repeatMode,
         )
     }
 }

@@ -66,6 +66,9 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
+    // Navigation Compose — navegar entre la lista y el player completo
+    implementation(libs.androidx.navigation.compose)
+
     // Drag & drop sobre LazyColumn (orden personalizado)
     implementation(libs.reorderable)
 

@@ -64,6 +64,10 @@ class SongListViewModel @Inject constructor(
 
     fun seekTo(positionMs: Long) = playbackController.seekTo(positionMs)
 
+    fun toggleShuffle() = playbackController.toggleShuffle()
+
+    fun cycleRepeat() = playbackController.cycleRepeat()
+
     /** Se llama una vez que el permiso está concedido. */
     fun loadSongs() {
         if (_uiState.value.isLoading) return
