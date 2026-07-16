@@ -7,6 +7,8 @@ import com.tecnozoni.reproductor.data.model.Song
 import com.tecnozoni.reproductor.data.model.SortOrder
 import com.tecnozoni.reproductor.playback.PlaybackController
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +45,9 @@ class SongListViewModel @Inject constructor(
     val playbackState = playbackController.state
 
     private var allSongs: List<Song> = emptyList()
+    // Orden personalizado guardado: id -> posición.
+    private var customOrder: Map<Long, Int> = emptyMap()
+    private var saveOrderJob: Job? = null
 
     init {
         // Conecta la UI con el servicio de reproducción (idempotente).
@@ -75,6 +80,7 @@ class SongListViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 allSongs = repository.getSongs()
+                customOrder = repository.getCustomOrder()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -94,9 +100,35 @@ class SongListViewModel @Inject constructor(
         _uiState.update { it.copy(sort = order, songs = sortSongs(allSongs, order)) }
     }
 
+    /**
+     * Reordena una canción (solo tiene sentido en orden CUSTOM). Actualiza la lista
+     * en memoria al instante (para que el arrastre se vea fluido) y persiste con debounce.
+     */
+    fun moveSong(fromIndex: Int, toIndex: Int) {
+        val current = _uiState.value.songs
+        if (fromIndex !in current.indices || toIndex !in current.indices) return
+        val newList = current.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+        _uiState.update { it.copy(songs = newList) }
+        customOrder = newList.mapIndexed { index, song -> song.id to index }.toMap()
+        persistOrder(newList.map { it.id })
+    }
+
+    private fun persistOrder(orderedIds: List<Long>) {
+        // Debounce: se guarda 400ms después del último movimiento, no en cada swap.
+        saveOrderJob?.cancel()
+        saveOrderJob = viewModelScope.launch {
+            delay(400)
+            repository.saveCustomOrder(orderedIds)
+        }
+    }
+
     private fun sortSongs(songs: List<Song>, order: SortOrder): List<Song> = when (order) {
         SortOrder.NAME -> songs.sortedBy { it.title.lowercase() }
         SortOrder.DURATION -> songs.sortedBy { it.durationMs }
         SortOrder.DATE_MODIFIED -> songs.sortedByDescending { it.dateModifiedSec }
+        // Con posición guardada primero (por posición); las nuevas, al final por nombre.
+        SortOrder.CUSTOM -> songs.sortedWith(
+            compareBy({ customOrder[it.id] ?: Int.MAX_VALUE }, { it.title.lowercase() }),
+        )
     }
 }

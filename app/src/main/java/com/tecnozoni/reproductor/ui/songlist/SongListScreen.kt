@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -55,6 +56,8 @@ import com.tecnozoni.reproductor.playback.PlaybackState
 import com.tecnozoni.reproductor.ui.songlist.components.RepeatButton
 import com.tecnozoni.reproductor.ui.songlist.components.ShuffleButton
 import com.tecnozoni.reproductor.ui.songlist.components.SongRow
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 /**
  * Pantalla única. Primero resuelve el permiso de lectura de audio (que cambia
@@ -136,6 +139,7 @@ fun SongListScreen(
         onToggleShuffle = viewModel::toggleShuffle,
         onCycleRepeat = viewModel::cycleRepeat,
         onOpenPlayer = onOpenPlayer,
+        onMove = viewModel::moveSong,
         modifier = modifier,
     )
 }
@@ -155,6 +159,7 @@ private fun SongListContent(
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onMove: (Int, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -206,9 +211,19 @@ private fun SongListContent(
                     if (uiState.isLoading) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
+                    if (uiState.sort == SortOrder.CUSTOM) {
+                        Text(
+                            text = "Mantené presionada una canción para reordenar.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                    }
                     SongList(
                         songs = uiState.songs,
+                        reorderable = uiState.sort == SortOrder.CUSTOM,
                         onSongClick = onSongClick,
+                        onMove = onMove,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -220,16 +235,38 @@ private fun SongListContent(
 @Composable
 private fun SongList(
     songs: List<Song>,
+    reorderable: Boolean,
     onSongClick: (Int) -> Unit,
+    onMove: (Int, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LazyColumn(modifier = modifier.fillMaxSize()) {
+    val lazyListState = rememberLazyListState()
+    val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        onMove(from.index, to.index)
+    }
+
+    LazyColumn(state = lazyListState, modifier = modifier.fillMaxSize()) {
         itemsIndexed(items = songs, key = { _, song -> song.id }) { index, song ->
-            SongRow(
-                song = song,
-                onClick = { onSongClick(index) },
-            )
-            HorizontalDivider()
+            if (reorderable) {
+                ReorderableItem(reorderState, key = song.id) { isDragging ->
+                    Surface(shadowElevation = if (isDragging) 6.dp else 0.dp) {
+                        Column {
+                            SongRow(
+                                song = song,
+                                onClick = { onSongClick(index) },
+                                modifier = Modifier.longPressDraggableHandle(),
+                            )
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            } else {
+                SongRow(
+                    song = song,
+                    onClick = { onSongClick(index) },
+                )
+                HorizontalDivider()
+            }
         }
     }
 }
@@ -327,6 +364,9 @@ private fun SortMenu(
         SortOption("Nombre", SortOrder.NAME, current) { onSortSelected(it); expanded = false }
         SortOption("Duración", SortOrder.DURATION, current) { onSortSelected(it); expanded = false }
         SortOption("Fecha de modificación", SortOrder.DATE_MODIFIED, current) {
+            onSortSelected(it); expanded = false
+        }
+        SortOption("Personalizado", SortOrder.CUSTOM, current) {
             onSortSelected(it); expanded = false
         }
     }
