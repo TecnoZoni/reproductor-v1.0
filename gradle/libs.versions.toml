@@ -16,6 +16,7 @@ ksp = "2.2.10-2.0.2"
 reorderable = "3.1.0"
 jaudiotagger = "2.3.15"
 navigationCompose = "2.9.8"
+datastore = "1.2.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -46,6 +47,7 @@ androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navig
 reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
 jaudiotagger = { group = "com.github.Adonai", name = "jaudiotagger", version.ref = "jaudiotagger" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

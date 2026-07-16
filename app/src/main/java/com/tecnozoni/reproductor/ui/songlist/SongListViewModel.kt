@@ -2,6 +2,7 @@ package com.tecnozoni.reproductor.ui.songlist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tecnozoni.reproductor.data.SettingsRepository
 import com.tecnozoni.reproductor.data.SongRepository
 import com.tecnozoni.reproductor.data.model.Song
 import com.tecnozoni.reproductor.data.model.SortOrder
@@ -12,6 +13,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -35,6 +37,7 @@ data class SongListUiState(
 @HiltViewModel
 class SongListViewModel @Inject constructor(
     private val repository: SongRepository,
+    private val settingsRepository: SettingsRepository,
     private val playbackController: PlaybackController,
 ) : ViewModel() {
 
@@ -52,6 +55,11 @@ class SongListViewModel @Inject constructor(
     init {
         // Conecta la UI con el servicio de reproducción (idempotente).
         playbackController.initialize()
+        // Restaura el último orden elegido (persistido en DataStore).
+        viewModelScope.launch {
+            val savedSort = settingsRepository.sortOrder.first()
+            _uiState.update { it.copy(sort = savedSort, songs = sortSongs(allSongs, savedSort)) }
+        }
     }
 
     /** Reproduce la lista actual empezando por la canción tocada. */
@@ -98,6 +106,7 @@ class SongListViewModel @Inject constructor(
 
     fun setSort(order: SortOrder) {
         _uiState.update { it.copy(sort = order, songs = sortSongs(allSongs, order)) }
+        viewModelScope.launch { settingsRepository.setSortOrder(order) }
     }
 
     /**
