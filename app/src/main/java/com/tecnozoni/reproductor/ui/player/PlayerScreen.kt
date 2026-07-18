@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -22,11 +25,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tecnozoni.reproductor.R
 import com.tecnozoni.reproductor.playback.PlaybackState
 import com.tecnozoni.reproductor.ui.songlist.components.PlayerArtwork
 import com.tecnozoni.reproductor.ui.songlist.components.RepeatButton
@@ -148,20 +153,31 @@ private fun PlayerContent(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ShuffleButton(enabled = state.shuffleEnabled, onClick = onToggleShuffle)
-                TextButton(onClick = onPrevious) {
-                    Text("⏮", style = MaterialTheme.typography.headlineMedium)
-                }
-                TextButton(onClick = onTogglePlayPause) {
-                    Text(
-                        text = if (state.isPlaying) "⏸" else "▶",
-                        style = MaterialTheme.typography.displaySmall,
+                ShuffleButton(enabled = state.shuffleEnabled, onClick = onToggleShuffle, size = 28.dp)
+                IconButton(onClick = onPrevious) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_skip_previous),
+                        contentDescription = "Anterior",
+                        modifier = Modifier.size(44.dp),
                     )
                 }
-                TextButton(onClick = onNext) {
-                    Text("⏭", style = MaterialTheme.typography.headlineMedium)
+                IconButton(onClick = onTogglePlayPause) {
+                    Icon(
+                        painter = painterResource(
+                            if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
+                        ),
+                        contentDescription = if (state.isPlaying) "Pausar" else "Reproducir",
+                        modifier = Modifier.size(64.dp),
+                    )
                 }
-                RepeatButton(repeatMode = state.repeatMode, onClick = onCycleRepeat)
+                IconButton(onClick = onNext) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_skip_next),
+                        contentDescription = "Siguiente",
+                        modifier = Modifier.size(44.dp),
+                    )
+                }
+                RepeatButton(repeatMode = state.repeatMode, onClick = onCycleRepeat, size = 28.dp)
             }
 
             Spacer(Modifier.height(12.dp))

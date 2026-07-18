@@ -10,8 +10,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -22,9 +22,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.tecnozoni.reproductor.R
 import com.tecnozoni.reproductor.data.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -54,7 +55,7 @@ fun SongArtwork(song: Song, modifier: Modifier = Modifier) {
     ArtBox(
         image = artwork,
         cornerRadius = 6.dp,
-        placeholderStyle = MaterialTheme.typography.titleLarge,
+        placeholderSize = 24.dp,
         modifier = modifier.size(48.dp),
     )
 }
@@ -71,7 +72,7 @@ fun PlayerArtwork(uri: Uri?, modifier: Modifier = Modifier) {
     ArtBox(
         image = artwork,
         cornerRadius = 16.dp,
-        placeholderStyle = MaterialTheme.typography.displayLarge,
+        placeholderSize = 96.dp,
         modifier = modifier,
     )
 }
@@ -80,7 +81,7 @@ fun PlayerArtwork(uri: Uri?, modifier: Modifier = Modifier) {
 private fun ArtBox(
     image: ImageBitmap?,
     cornerRadius: Dp,
-    placeholderStyle: TextStyle,
+    placeholderSize: Dp,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -97,10 +98,11 @@ private fun ArtBox(
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            Text(
-                text = "♪",
-                style = placeholderStyle,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Icon(
+                painter = painterResource(R.drawable.ic_music_note),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(placeholderSize),
             )
         }
     }

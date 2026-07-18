@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -26,6 +27,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -43,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -50,6 +54,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tecnozoni.reproductor.R
 import com.tecnozoni.reproductor.data.model.Song
 import com.tecnozoni.reproductor.data.model.SortDirection
 import com.tecnozoni.reproductor.data.model.SortOrder
@@ -346,17 +351,28 @@ private fun PlayerBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 ShuffleButton(enabled = state.shuffleEnabled, onClick = onToggleShuffle)
-                TextButton(onClick = onPrevious) {
-                    Text("⏮", style = MaterialTheme.typography.headlineSmall)
-                }
-                TextButton(onClick = onTogglePlayPause) {
-                    Text(
-                        text = if (state.isPlaying) "⏸" else "▶",
-                        style = MaterialTheme.typography.headlineMedium,
+                IconButton(onClick = onPrevious) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_skip_previous),
+                        contentDescription = "Anterior",
+                        modifier = Modifier.size(32.dp),
                     )
                 }
-                TextButton(onClick = onNext) {
-                    Text("⏭", style = MaterialTheme.typography.headlineSmall)
+                IconButton(onClick = onTogglePlayPause) {
+                    Icon(
+                        painter = painterResource(
+                            if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
+                        ),
+                        contentDescription = if (state.isPlaying) "Pausar" else "Reproducir",
+                        modifier = Modifier.size(40.dp),
+                    )
+                }
+                IconButton(onClick = onNext) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_skip_next),
+                        contentDescription = "Siguiente",
+                        modifier = Modifier.size(32.dp),
+                    )
                 }
                 RepeatButton(repeatMode = state.repeatMode, onClick = onCycleRepeat)
             }
