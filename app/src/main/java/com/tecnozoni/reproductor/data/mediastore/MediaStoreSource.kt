@@ -4,9 +4,15 @@ import android.content.ContentUris
 import android.content.Context
 import android.provider.MediaStore
 import com.tecnozoni.reproductor.data.model.Song
+import com.tecnozoni.reproductor.data.tags.TagReader
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.text.Normalizer
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+
+// Caché por proceso de los tags ya recuperados del archivo (lo caro: abrir el .mp3).
+// Evita releer ID3 en cada recarga/al volver a la app. id -> (title, artist).
+private val recoveredTagCache = ConcurrentHashMap<Long, Pair<String?, String?>>()
 
 /**
  * Lee las canciones del dispositivo desde MediaStore (scoped storage).
@@ -67,11 +73,14 @@ class MediaStoreSource @Inject constructor(
                     ?.takeIf { it.isUsable() && it != MediaStore.UNKNOWN_STRING }
 
                 // Si MediaStore devolvió título/artista rotos, leemos los tags CRUDOS del
-                // archivo (donde el dato original sigue intacto). Solo para los rotos → barato.
+                // archivo (donde el dato original sigue intacto). Cacheado por id: solo se
+                // abre el archivo la primera vez; las recargas siguientes reusan el resultado.
                 if ((title == null || artist == null) && !path.isNullOrBlank()) {
-                    val tags = com.tecnozoni.reproductor.data.tags.TagReader.read(path)
-                    if (title == null) title = tags?.title?.takeIf { it.isUsable() }
-                    if (artist == null) artist = tags?.artist?.takeIf { it.isUsable() }
+                    val tags = recoveredTagCache.getOrPut(id) {
+                        TagReader.read(path)?.let { it.title to it.artist } ?: (null to null)
+                    }
+                    if (title == null) title = tags.first?.takeIf { it.isUsable() }
+                    if (artist == null) artist = tags.second?.takeIf { it.isUsable() }
                 }
 
                 // Últimos recursos: nombre de archivo para el título, genérico para el artista.

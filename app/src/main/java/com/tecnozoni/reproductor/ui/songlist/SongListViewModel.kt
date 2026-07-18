@@ -25,6 +25,7 @@ data class SongListUiState(
     val songs: List<Song> = emptyList(),
     val sort: SortOrder = SortOrder.NAME,
     val direction: SortDirection = SortDirection.ASC,
+    val query: String = "",
     val loaded: Boolean = false,
     val error: String? = null,
 )
@@ -50,6 +51,8 @@ class SongListViewModel @Inject constructor(
     val playbackState = playbackController.state
 
     private var allSongs: List<Song> = emptyList()
+    // Lista completa ya ordenada (sin filtrar). El buscador filtra sobre esto.
+    private var sortedSongs: List<Song> = emptyList()
     // Orden personalizado guardado: id -> posición.
     private var customOrder: Map<Long, Int> = emptyMap()
     private var saveOrderJob: Job? = null
@@ -60,13 +63,8 @@ class SongListViewModel @Inject constructor(
         // Restaura el último orden + dirección elegidos (persistido en DataStore).
         viewModelScope.launch {
             val pref = settingsRepository.sortPreference.first()
-            _uiState.update {
-                it.copy(
-                    sort = pref.order,
-                    direction = pref.direction,
-                    songs = sortSongs(allSongs, pref.order, pref.direction),
-                )
-            }
+            _uiState.update { it.copy(sort = pref.order, direction = pref.direction) }
+            rebuildSorted()
         }
     }
 
@@ -97,13 +95,8 @@ class SongListViewModel @Inject constructor(
             try {
                 allSongs = repository.getSongs()
                 customOrder = repository.getCustomOrder()
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        loaded = true,
-                        songs = sortSongs(allSongs, it.sort, it.direction),
-                    )
-                }
+                _uiState.update { it.copy(isLoading = false, loaded = true) }
+                rebuildSorted()
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(isLoading = false, error = e.message ?: "Error leyendo canciones")
@@ -124,10 +117,30 @@ class SongListViewModel @Inject constructor(
                 if (state.direction == SortDirection.ASC) SortDirection.DESC else SortDirection.ASC
             else -> SortDirection.ASC
         }
-        _uiState.update {
-            it.copy(sort = order, direction = newDirection, songs = sortSongs(allSongs, order, newDirection))
-        }
+        _uiState.update { it.copy(sort = order, direction = newDirection) }
+        rebuildSorted()
         viewModelScope.launch { settingsRepository.setSort(order, newDirection) }
+    }
+
+    /** Filtra la lista por título o artista (en memoria, instantáneo). */
+    fun setQuery(query: String) {
+        _uiState.update { it.copy(query = query) }
+        applyFilter()
+    }
+
+    private fun rebuildSorted() {
+        sortedSongs = sortSongs(allSongs, _uiState.value.sort, _uiState.value.direction)
+        applyFilter()
+    }
+
+    private fun applyFilter() {
+        val q = _uiState.value.query.trim()
+        val filtered = if (q.isBlank()) {
+            sortedSongs
+        } else {
+            sortedSongs.filter { it.title.contains(q, ignoreCase = true) || it.artist.contains(q, ignoreCase = true) }
+        }
+        _uiState.update { it.copy(songs = filtered) }
     }
 
     /**
@@ -135,9 +148,12 @@ class SongListViewModel @Inject constructor(
      * en memoria al instante (para que el arrastre se vea fluido) y persiste con debounce.
      */
     fun moveSong(fromIndex: Int, toIndex: Int) {
+        // No se reordena mientras hay una búsqueda activa (la lista está filtrada).
+        if (_uiState.value.query.isNotBlank()) return
         val current = _uiState.value.songs
         if (fromIndex !in current.indices || toIndex !in current.indices) return
         val newList = current.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+        sortedSongs = newList
         _uiState.update { it.copy(songs = newList) }
         customOrder = newList.mapIndexed { index, song -> song.id to index }.toMap()
         persistOrder(newList.map { it.id })

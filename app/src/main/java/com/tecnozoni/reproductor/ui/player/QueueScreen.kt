@@ -3,14 +3,18 @@ package com.tecnozoni.reproductor.ui.player
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -20,11 +24,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tecnozoni.reproductor.R
 import com.tecnozoni.reproductor.playback.QueueItem
 
 @Composable
@@ -83,11 +89,18 @@ private fun QueueRow(item: QueueItem, onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // ▶ marca la canción que suena ahora.
-        Text(
-            text = if (item.isCurrent) "▶  " else "",
-            color = MaterialTheme.colorScheme.primary,
-        )
+        // Ícono que marca la canción que suena ahora (o hueco para alinear).
+        if (item.isCurrent) {
+            Icon(
+                painter = painterResource(R.drawable.ic_play),
+                contentDescription = "Reproduciendo",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+        } else {
+            Spacer(Modifier.width(28.dp))
+        }
         Column(modifier = Modifier.padding(end = 8.dp)) {
             Text(
                 text = item.title,
