@@ -13,3 +13,11 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Firma del APK: contraseñas y clave privada. NUNCA versionar.
+keystore.properties
+*.jks
+*.keystore
+
+# Salida de builds de release (APK firmado, perfiles).
+/app/release/
