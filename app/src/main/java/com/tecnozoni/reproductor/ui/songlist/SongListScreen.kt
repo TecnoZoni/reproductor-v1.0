@@ -257,6 +257,7 @@ private fun SongListContent(
                             reorderable = uiState.sort == SortOrder.CUSTOM && uiState.query.isBlank(),
                             sort = uiState.sort,
                             direction = uiState.direction,
+                            query = uiState.query,
                             onSongClick = onSongClick,
                             onMove = onMove,
                             modifier = Modifier.weight(1f),
@@ -274,6 +275,7 @@ private fun SongList(
     reorderable: Boolean,
     sort: SortOrder,
     direction: SortDirection,
+    query: String,
     onSongClick: (Int) -> Unit,
     onMove: (Int, Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -283,8 +285,8 @@ private fun SongList(
         onMove(from.index, to.index)
     }
 
-    // Al cambiar el criterio o la dirección, volver al tope (no seguir el ítem anterior).
-    LaunchedEffect(sort, direction) {
+    // Al cambiar criterio, dirección o búsqueda, volver al tope (no seguir el ítem anterior).
+    LaunchedEffect(sort, direction, query) {
         lazyListState.scrollToItem(0)
     }
 
