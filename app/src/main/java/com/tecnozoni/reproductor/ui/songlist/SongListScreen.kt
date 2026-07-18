@@ -31,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -136,6 +137,7 @@ fun SongListScreen(
         uiState = uiState,
         playbackState = playbackState,
         onSortSelected = viewModel::setSort,
+        onQueryChange = viewModel::setQuery,
         onRefresh = viewModel::loadSongs,
         onSongClick = viewModel::play,
         onTogglePlayPause = viewModel::togglePlayPause,
@@ -156,6 +158,7 @@ private fun SongListContent(
     uiState: SongListUiState,
     playbackState: PlaybackState,
     onSortSelected: (SortOrder) -> Unit,
+    onQueryChange: (String) -> Unit,
     onRefresh: () -> Unit,
     onSongClick: (Int) -> Unit,
     onTogglePlayPause: () -> Unit,
@@ -204,15 +207,16 @@ private fun SongListContent(
                 .padding(innerPadding),
         ) {
             when {
-                // Spinner a pantalla completa solo en la carga INICIAL (lista vacía).
-                uiState.isLoading && uiState.songs.isEmpty() ->
+                // Spinner a pantalla completa solo en la carga INICIAL.
+                uiState.isLoading && !uiState.loaded ->
                     CircularProgressIndicator(Modifier.align(Alignment.Center))
 
-                uiState.error != null && uiState.songs.isEmpty() -> CenteredMessage(
+                uiState.error != null && !uiState.loaded -> CenteredMessage(
                     text = "No se pudieron leer las canciones:\n${uiState.error}",
                 )
 
-                uiState.loaded && uiState.songs.isEmpty() -> CenteredMessage(
+                // El dispositivo no tiene canciones (sin búsqueda activa).
+                uiState.loaded && uiState.query.isBlank() && uiState.songs.isEmpty() -> CenteredMessage(
                     text = "No se encontraron canciones en el dispositivo.",
                 )
 
@@ -221,7 +225,10 @@ private fun SongListContent(
                     if (uiState.isLoading) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
-                    if (uiState.sort == SortOrder.CUSTOM) {
+                    SearchField(query = uiState.query, onQueryChange = onQueryChange)
+
+                    // Reordenar solo con orden Personalizado y sin búsqueda activa.
+                    if (uiState.sort == SortOrder.CUSTOM && uiState.query.isBlank()) {
                         Text(
                             text = "Mantené presionada una canción para reordenar.",
                             style = MaterialTheme.typography.labelSmall,
@@ -229,15 +236,32 @@ private fun SongListContent(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         )
                     }
-                    SongList(
-                        songs = uiState.songs,
-                        reorderable = uiState.sort == SortOrder.CUSTOM,
-                        sort = uiState.sort,
-                        direction = uiState.direction,
-                        onSongClick = onSongClick,
-                        onMove = onMove,
-                        modifier = Modifier.weight(1f),
-                    )
+
+                    if (uiState.songs.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "Sin resultados para “${uiState.query}”",
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.padding(24.dp),
+                            )
+                        }
+                    } else {
+                        SongList(
+                            songs = uiState.songs,
+                            reorderable = uiState.sort == SortOrder.CUSTOM && uiState.query.isBlank(),
+                            sort = uiState.sort,
+                            direction = uiState.direction,
+                            onSongClick = onSongClick,
+                            onMove = onMove,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
         }
@@ -378,6 +402,29 @@ private fun PlayerBar(
             }
         }
     }
+}
+
+@Composable
+private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        placeholder = { Text("Buscar título o artista") },
+        singleLine = true,
+        leadingIcon = {
+            Icon(painter = painterResource(R.drawable.ic_search), contentDescription = null)
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(painter = painterResource(R.drawable.ic_close), contentDescription = "Limpiar")
+                }
+            }
+        },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
