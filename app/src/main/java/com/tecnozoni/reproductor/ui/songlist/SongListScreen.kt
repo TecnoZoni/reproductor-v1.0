@@ -227,6 +227,8 @@ private fun SongListContent(
                     SongList(
                         songs = uiState.songs,
                         reorderable = uiState.sort == SortOrder.CUSTOM,
+                        sort = uiState.sort,
+                        direction = uiState.direction,
                         onSongClick = onSongClick,
                         onMove = onMove,
                         modifier = Modifier.weight(1f),
@@ -241,6 +243,8 @@ private fun SongListContent(
 private fun SongList(
     songs: List<Song>,
     reorderable: Boolean,
+    sort: SortOrder,
+    direction: SortDirection,
     onSongClick: (Int) -> Unit,
     onMove: (Int, Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -248,6 +252,11 @@ private fun SongList(
     val lazyListState = rememberLazyListState()
     val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
         onMove(from.index, to.index)
+    }
+
+    // Al cambiar el criterio o la dirección, volver al tope (no seguir el ítem anterior).
+    LaunchedEffect(sort, direction) {
+        lazyListState.scrollToItem(0)
     }
 
     LazyColumn(state = lazyListState, modifier = modifier.fillMaxSize()) {
