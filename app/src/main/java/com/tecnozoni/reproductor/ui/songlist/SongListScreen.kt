@@ -302,7 +302,7 @@ private fun PlayerBar(
     val duration = state.durationMs.coerceAtLeast(0L)
     val shownMs = dragMs?.toLong() ?: state.positionMs
 
-    Surface(tonalElevation = 3.dp) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
