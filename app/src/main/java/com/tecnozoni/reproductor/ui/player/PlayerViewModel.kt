@@ -16,7 +16,9 @@ class PlayerViewModel @Inject constructor(
 ) : ViewModel() {
 
     val playbackState = playbackController.state
+    val queue = playbackController.queue
 
+    fun playIndex(index: Int) = playbackController.playIndex(index)
     fun togglePlayPause() = playbackController.togglePlayPause()
     fun next() = playbackController.next()
     fun previous() = playbackController.previous()

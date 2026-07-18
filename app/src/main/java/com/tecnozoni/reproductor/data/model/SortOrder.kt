@@ -7,3 +7,9 @@ enum class SortOrder {
     DATE_MODIFIED,
     CUSTOM, // orden personalizado arrastrable, persistido en Room
 }
+
+/** Dirección del orden (no aplica a CUSTOM, que es manual). */
+enum class SortDirection {
+    ASC,
+    DESC,
+}

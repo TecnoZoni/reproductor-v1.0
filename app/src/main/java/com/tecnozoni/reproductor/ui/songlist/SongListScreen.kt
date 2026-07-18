@@ -51,6 +51,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tecnozoni.reproductor.data.model.Song
+import com.tecnozoni.reproductor.data.model.SortDirection
 import com.tecnozoni.reproductor.data.model.SortOrder
 import com.tecnozoni.reproductor.playback.PlaybackState
 import com.tecnozoni.reproductor.ui.songlist.components.RepeatButton
@@ -169,7 +170,11 @@ private fun SongListContent(
                 title = { Text("Reproductor") },
                 actions = {
                     TextButton(onClick = onRefresh) { Text("Actualizar") }
-                    SortMenu(current = uiState.sort, onSortSelected = onSortSelected)
+                    SortMenu(
+                        current = uiState.sort,
+                        direction = uiState.direction,
+                        onSortSelected = onSortSelected,
+                    )
                 },
             )
         },
@@ -354,6 +359,7 @@ private fun PlayerBar(
 @Composable
 private fun SortMenu(
     current: SortOrder,
+    direction: SortDirection,
     onSortSelected: (SortOrder) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -361,12 +367,12 @@ private fun SortMenu(
         Text("Ordenar")
     }
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-        SortOption("Nombre", SortOrder.NAME, current) { onSortSelected(it); expanded = false }
-        SortOption("Duración", SortOrder.DURATION, current) { onSortSelected(it); expanded = false }
-        SortOption("Fecha de modificación", SortOrder.DATE_MODIFIED, current) {
+        SortOption("Nombre", SortOrder.NAME, current, direction) { onSortSelected(it); expanded = false }
+        SortOption("Duración", SortOrder.DURATION, current, direction) { onSortSelected(it); expanded = false }
+        SortOption("Fecha de modificación", SortOrder.DATE_MODIFIED, current, direction) {
             onSortSelected(it); expanded = false
         }
-        SortOption("Personalizado", SortOrder.CUSTOM, current) {
+        SortOption("Personalizado", SortOrder.CUSTOM, current, direction) {
             onSortSelected(it); expanded = false
         }
     }
@@ -377,10 +383,20 @@ private fun SortOption(
     label: String,
     order: SortOrder,
     current: SortOrder,
+    direction: SortDirection,
     onSelected: (SortOrder) -> Unit,
 ) {
+    val active = order == current
+    // Flecha a la izquierda del orden activo (↑ ascendente / ↓ descendente).
+    // CUSTOM es manual → marca simple. Los inactivos van con sangría para alinear.
+    val prefix = when {
+        !active -> "     "
+        order == SortOrder.CUSTOM -> "•  "
+        direction == SortDirection.ASC -> "↑  "
+        else -> "↓  "
+    }
     DropdownMenuItem(
-        text = { Text(if (order == current) "✓  $label" else label) },
+        text = { Text("$prefix$label") },
         onClick = { onSelected(order) },
     )
 }

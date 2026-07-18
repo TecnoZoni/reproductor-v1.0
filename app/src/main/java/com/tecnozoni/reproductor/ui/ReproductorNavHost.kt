@@ -5,12 +5,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.tecnozoni.reproductor.ui.player.PlayerScreen
+import com.tecnozoni.reproductor.ui.player.QueueScreen
 import com.tecnozoni.reproductor.ui.songlist.SongListScreen
 
 /** Rutas de la app. */
 private object Routes {
     const val LIST = "list"
     const val PLAYER = "player"
+    const val QUEUE = "queue"
 }
 
 /**
@@ -26,7 +28,13 @@ fun ReproductorNavHost() {
             SongListScreen(onOpenPlayer = { navController.navigate(Routes.PLAYER) })
         }
         composable(Routes.PLAYER) {
-            PlayerScreen(onBack = { navController.popBackStack() })
+            PlayerScreen(
+                onBack = { navController.popBackStack() },
+                onOpenQueue = { navController.navigate(Routes.QUEUE) },
+            )
+        }
+        composable(Routes.QUEUE) {
+            QueueScreen(onBack = { navController.popBackStack() })
         }
     }
 }

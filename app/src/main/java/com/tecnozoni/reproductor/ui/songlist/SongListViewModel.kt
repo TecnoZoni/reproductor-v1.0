@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.tecnozoni.reproductor.data.SettingsRepository
 import com.tecnozoni.reproductor.data.SongRepository
 import com.tecnozoni.reproductor.data.model.Song
+import com.tecnozoni.reproductor.data.model.SortDirection
 import com.tecnozoni.reproductor.data.model.SortOrder
 import com.tecnozoni.reproductor.playback.PlaybackController
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,6 +24,7 @@ data class SongListUiState(
     val isLoading: Boolean = false,
     val songs: List<Song> = emptyList(),
     val sort: SortOrder = SortOrder.NAME,
+    val direction: SortDirection = SortDirection.ASC,
     val loaded: Boolean = false,
     val error: String? = null,
 )
@@ -55,10 +57,16 @@ class SongListViewModel @Inject constructor(
     init {
         // Conecta la UI con el servicio de reproducción (idempotente).
         playbackController.initialize()
-        // Restaura el último orden elegido (persistido en DataStore).
+        // Restaura el último orden + dirección elegidos (persistido en DataStore).
         viewModelScope.launch {
-            val savedSort = settingsRepository.sortOrder.first()
-            _uiState.update { it.copy(sort = savedSort, songs = sortSongs(allSongs, savedSort)) }
+            val pref = settingsRepository.sortPreference.first()
+            _uiState.update {
+                it.copy(
+                    sort = pref.order,
+                    direction = pref.direction,
+                    songs = sortSongs(allSongs, pref.order, pref.direction),
+                )
+            }
         }
     }
 
@@ -93,7 +101,7 @@ class SongListViewModel @Inject constructor(
                     it.copy(
                         isLoading = false,
                         loaded = true,
-                        songs = sortSongs(allSongs, it.sort),
+                        songs = sortSongs(allSongs, it.sort, it.direction),
                     )
                 }
             } catch (e: Exception) {
@@ -104,9 +112,22 @@ class SongListViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Selecciona un orden. Si se re-toca el mismo (y no es CUSTOM), invierte la dirección.
+     * Al elegir uno distinto, arranca en ascendente.
+     */
     fun setSort(order: SortOrder) {
-        _uiState.update { it.copy(sort = order, songs = sortSongs(allSongs, order)) }
-        viewModelScope.launch { settingsRepository.setSortOrder(order) }
+        val state = _uiState.value
+        val newDirection = when {
+            order == SortOrder.CUSTOM -> SortDirection.ASC
+            order == state.sort ->
+                if (state.direction == SortDirection.ASC) SortDirection.DESC else SortDirection.ASC
+            else -> SortDirection.ASC
+        }
+        _uiState.update {
+            it.copy(sort = order, direction = newDirection, songs = sortSongs(allSongs, order, newDirection))
+        }
+        viewModelScope.launch { settingsRepository.setSort(order, newDirection) }
     }
 
     /**
@@ -131,13 +152,19 @@ class SongListViewModel @Inject constructor(
         }
     }
 
-    private fun sortSongs(songs: List<Song>, order: SortOrder): List<Song> = when (order) {
-        SortOrder.NAME -> songs.sortedBy { it.title.lowercase() }
-        SortOrder.DURATION -> songs.sortedBy { it.durationMs }
-        SortOrder.DATE_MODIFIED -> songs.sortedByDescending { it.dateModifiedSec }
-        // Con posición guardada primero (por posición); las nuevas, al final por nombre.
-        SortOrder.CUSTOM -> songs.sortedWith(
-            compareBy({ customOrder[it.id] ?: Int.MAX_VALUE }, { it.title.lowercase() }),
-        )
+    private fun sortSongs(songs: List<Song>, order: SortOrder, direction: SortDirection): List<Song> {
+        // CUSTOM es manual: no se invierte.
+        if (order == SortOrder.CUSTOM) {
+            return songs.sortedWith(
+                compareBy({ customOrder[it.id] ?: Int.MAX_VALUE }, { it.title.lowercase() }),
+            )
+        }
+        val ascending = when (order) {
+            SortOrder.NAME -> songs.sortedBy { it.title.lowercase() }
+            SortOrder.DURATION -> songs.sortedBy { it.durationMs }
+            SortOrder.DATE_MODIFIED -> songs.sortedBy { it.dateModifiedSec }
+            SortOrder.CUSTOM -> songs // inalcanzable
+        }
+        return if (direction == SortDirection.ASC) ascending else ascending.reversed()
     }
 }
