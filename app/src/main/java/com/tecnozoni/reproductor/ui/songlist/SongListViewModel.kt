@@ -2,14 +2,19 @@ package com.tecnozoni.reproductor.ui.songlist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tecnozoni.reproductor.data.SettingsRepository
 import com.tecnozoni.reproductor.data.SongRepository
 import com.tecnozoni.reproductor.data.model.Song
+import com.tecnozoni.reproductor.data.model.SortDirection
 import com.tecnozoni.reproductor.data.model.SortOrder
 import com.tecnozoni.reproductor.playback.PlaybackController
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -19,6 +24,7 @@ data class SongListUiState(
     val isLoading: Boolean = false,
     val songs: List<Song> = emptyList(),
     val sort: SortOrder = SortOrder.NAME,
+    val direction: SortDirection = SortDirection.ASC,
     val loaded: Boolean = false,
     val error: String? = null,
 )
@@ -33,6 +39,7 @@ data class SongListUiState(
 @HiltViewModel
 class SongListViewModel @Inject constructor(
     private val repository: SongRepository,
+    private val settingsRepository: SettingsRepository,
     private val playbackController: PlaybackController,
 ) : ViewModel() {
 
@@ -43,10 +50,24 @@ class SongListViewModel @Inject constructor(
     val playbackState = playbackController.state
 
     private var allSongs: List<Song> = emptyList()
+    // Orden personalizado guardado: id -> posición.
+    private var customOrder: Map<Long, Int> = emptyMap()
+    private var saveOrderJob: Job? = null
 
     init {
         // Conecta la UI con el servicio de reproducción (idempotente).
         playbackController.initialize()
+        // Restaura el último orden + dirección elegidos (persistido en DataStore).
+        viewModelScope.launch {
+            val pref = settingsRepository.sortPreference.first()
+            _uiState.update {
+                it.copy(
+                    sort = pref.order,
+                    direction = pref.direction,
+                    songs = sortSongs(allSongs, pref.order, pref.direction),
+                )
+            }
+        }
     }
 
     /** Reproduce la lista actual empezando por la canción tocada. */
@@ -75,11 +96,12 @@ class SongListViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 allSongs = repository.getSongs()
+                customOrder = repository.getCustomOrder()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         loaded = true,
-                        songs = sortSongs(allSongs, it.sort),
+                        songs = sortSongs(allSongs, it.sort, it.direction),
                     )
                 }
             } catch (e: Exception) {
@@ -90,13 +112,59 @@ class SongListViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Selecciona un orden. Si se re-toca el mismo (y no es CUSTOM), invierte la dirección.
+     * Al elegir uno distinto, arranca en ascendente.
+     */
     fun setSort(order: SortOrder) {
-        _uiState.update { it.copy(sort = order, songs = sortSongs(allSongs, order)) }
+        val state = _uiState.value
+        val newDirection = when {
+            order == SortOrder.CUSTOM -> SortDirection.ASC
+            order == state.sort ->
+                if (state.direction == SortDirection.ASC) SortDirection.DESC else SortDirection.ASC
+            else -> SortDirection.ASC
+        }
+        _uiState.update {
+            it.copy(sort = order, direction = newDirection, songs = sortSongs(allSongs, order, newDirection))
+        }
+        viewModelScope.launch { settingsRepository.setSort(order, newDirection) }
     }
 
-    private fun sortSongs(songs: List<Song>, order: SortOrder): List<Song> = when (order) {
-        SortOrder.NAME -> songs.sortedBy { it.title.lowercase() }
-        SortOrder.DURATION -> songs.sortedBy { it.durationMs }
-        SortOrder.DATE_MODIFIED -> songs.sortedByDescending { it.dateModifiedSec }
+    /**
+     * Reordena una canción (solo tiene sentido en orden CUSTOM). Actualiza la lista
+     * en memoria al instante (para que el arrastre se vea fluido) y persiste con debounce.
+     */
+    fun moveSong(fromIndex: Int, toIndex: Int) {
+        val current = _uiState.value.songs
+        if (fromIndex !in current.indices || toIndex !in current.indices) return
+        val newList = current.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+        _uiState.update { it.copy(songs = newList) }
+        customOrder = newList.mapIndexed { index, song -> song.id to index }.toMap()
+        persistOrder(newList.map { it.id })
+    }
+
+    private fun persistOrder(orderedIds: List<Long>) {
+        // Debounce: se guarda 400ms después del último movimiento, no en cada swap.
+        saveOrderJob?.cancel()
+        saveOrderJob = viewModelScope.launch {
+            delay(400)
+            repository.saveCustomOrder(orderedIds)
+        }
+    }
+
+    private fun sortSongs(songs: List<Song>, order: SortOrder, direction: SortDirection): List<Song> {
+        // CUSTOM es manual: no se invierte.
+        if (order == SortOrder.CUSTOM) {
+            return songs.sortedWith(
+                compareBy({ customOrder[it.id] ?: Int.MAX_VALUE }, { it.title.lowercase() }),
+            )
+        }
+        val ascending = when (order) {
+            SortOrder.NAME -> songs.sortedBy { it.title.lowercase() }
+            SortOrder.DURATION -> songs.sortedBy { it.durationMs }
+            SortOrder.DATE_MODIFIED -> songs.sortedBy { it.dateModifiedSec }
+            SortOrder.CUSTOM -> songs // inalcanzable
+        }
+        return if (direction == SortDirection.ASC) ascending else ascending.reversed()
     }
 }

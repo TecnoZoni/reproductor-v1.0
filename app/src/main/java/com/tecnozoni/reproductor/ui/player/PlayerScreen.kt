@@ -36,6 +36,7 @@ import com.tecnozoni.reproductor.ui.songlist.components.formatDuration
 @Composable
 fun PlayerScreen(
     onBack: () -> Unit,
+    onOpenQueue: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PlayerViewModel = hiltViewModel(),
 ) {
@@ -44,6 +45,7 @@ fun PlayerScreen(
     PlayerContent(
         state = state,
         onBack = onBack,
+        onOpenQueue = onOpenQueue,
         onTogglePlayPause = viewModel::togglePlayPause,
         onNext = viewModel::next,
         onPrevious = viewModel::previous,
@@ -58,6 +60,7 @@ fun PlayerScreen(
 private fun PlayerContent(
     state: PlaybackState,
     onBack: () -> Unit,
+    onOpenQueue: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -77,10 +80,14 @@ private fun PlayerContent(
                 .safeDrawingPadding() // respeta status bar y barra de navegación (edge-to-edge)
                 .padding(horizontal = 24.dp, vertical = 12.dp),
         ) {
-            // Barra superior: volver.
+            // Barra superior: volver + ver cola.
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onBack) {
                     Text("▾  Volver", style = MaterialTheme.typography.labelLarge)
+                }
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onOpenQueue) {
+                    Text("Cola", style = MaterialTheme.typography.labelLarge)
                 }
             }
 

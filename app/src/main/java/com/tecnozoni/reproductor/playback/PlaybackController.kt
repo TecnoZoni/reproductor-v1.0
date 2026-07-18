@@ -8,6 +8,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
@@ -40,6 +41,14 @@ data class PlaybackState(
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
 )
 
+/** Una entrada de la cola de reproducción. */
+data class QueueItem(
+    val index: Int,
+    val title: String,
+    val artist: String,
+    val isCurrent: Boolean,
+)
+
 /**
  * "Control remoto" hacia el PlaybackService. Construye un MediaController (conexión
  * asíncrona) y expone el estado como StateFlow para Compose. Singleton: una sola
@@ -62,13 +71,21 @@ class PlaybackController @Inject constructor(
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
+    private val _queue = MutableStateFlow<List<QueueItem>>(emptyList())
+    val queue: StateFlow<List<QueueItem>> = _queue.asStateFlow()
+
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (isPlaying) startPositionUpdates() else stopPositionUpdates()
             updateState()
         }
 
-        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = updateState()
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            updateState()
+            updateQueue()
+        }
+
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) = updateQueue()
         override fun onPlaybackStateChanged(playbackState: Int) = updateState()
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = updateState()
         override fun onRepeatModeChanged(repeatMode: Int) = updateState()
@@ -88,6 +105,7 @@ class PlaybackController @Inject constructor(
                 pendingAction = null
                 if (c.isPlaying) startPositionUpdates()
                 updateState()
+                updateQueue()
             },
             ContextCompat.getMainExecutor(context),
         )
@@ -106,6 +124,13 @@ class PlaybackController @Inject constructor(
     fun togglePlayPause() {
         val c = controller ?: return
         if (c.isPlaying) c.pause() else c.play()
+    }
+
+    /** Salta a una entrada de la cola por su índice. */
+    fun playIndex(index: Int) {
+        val c = controller ?: return
+        c.seekToDefaultPosition(index)
+        c.play()
     }
 
     fun next() {
@@ -154,6 +179,20 @@ class PlaybackController @Inject constructor(
     private fun stopPositionUpdates() {
         positionJob?.cancel()
         positionJob = null
+    }
+
+    private fun updateQueue() {
+        val c = controller ?: return
+        val current = c.currentMediaItemIndex
+        _queue.value = (0 until c.mediaItemCount).map { i ->
+            val md = c.getMediaItemAt(i).mediaMetadata
+            QueueItem(
+                index = i,
+                title = md.title?.toString() ?: "",
+                artist = md.artist?.toString() ?: "",
+                isCurrent = i == current,
+            )
+        }
     }
 
     private fun updateState() {

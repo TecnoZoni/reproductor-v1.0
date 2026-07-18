@@ -69,6 +69,9 @@ dependencies {
     // Navigation Compose — navegar entre la lista y el player completo
     implementation(libs.androidx.navigation.compose)
 
+    // DataStore — preferencias simples (ej. el último orden elegido)
+    implementation(libs.androidx.datastore.preferences)
+
     // Drag & drop sobre LazyColumn (orden personalizado)
     implementation(libs.reorderable)
 

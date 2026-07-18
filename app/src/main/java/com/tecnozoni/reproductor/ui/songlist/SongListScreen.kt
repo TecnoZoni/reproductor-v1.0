@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -50,11 +51,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tecnozoni.reproductor.data.model.Song
+import com.tecnozoni.reproductor.data.model.SortDirection
 import com.tecnozoni.reproductor.data.model.SortOrder
 import com.tecnozoni.reproductor.playback.PlaybackState
 import com.tecnozoni.reproductor.ui.songlist.components.RepeatButton
 import com.tecnozoni.reproductor.ui.songlist.components.ShuffleButton
 import com.tecnozoni.reproductor.ui.songlist.components.SongRow
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 /**
  * Pantalla única. Primero resuelve el permiso de lectura de audio (que cambia
@@ -136,6 +140,7 @@ fun SongListScreen(
         onToggleShuffle = viewModel::toggleShuffle,
         onCycleRepeat = viewModel::cycleRepeat,
         onOpenPlayer = onOpenPlayer,
+        onMove = viewModel::moveSong,
         modifier = modifier,
     )
 }
@@ -155,6 +160,7 @@ private fun SongListContent(
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onMove: (Int, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -164,7 +170,11 @@ private fun SongListContent(
                 title = { Text("Reproductor") },
                 actions = {
                     TextButton(onClick = onRefresh) { Text("Actualizar") }
-                    SortMenu(current = uiState.sort, onSortSelected = onSortSelected)
+                    SortMenu(
+                        current = uiState.sort,
+                        direction = uiState.direction,
+                        onSortSelected = onSortSelected,
+                    )
                 },
             )
         },
@@ -206,9 +216,21 @@ private fun SongListContent(
                     if (uiState.isLoading) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
+                    if (uiState.sort == SortOrder.CUSTOM) {
+                        Text(
+                            text = "Mantené presionada una canción para reordenar.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                    }
                     SongList(
                         songs = uiState.songs,
+                        reorderable = uiState.sort == SortOrder.CUSTOM,
+                        sort = uiState.sort,
+                        direction = uiState.direction,
                         onSongClick = onSongClick,
+                        onMove = onMove,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -220,16 +242,45 @@ private fun SongListContent(
 @Composable
 private fun SongList(
     songs: List<Song>,
+    reorderable: Boolean,
+    sort: SortOrder,
+    direction: SortDirection,
     onSongClick: (Int) -> Unit,
+    onMove: (Int, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LazyColumn(modifier = modifier.fillMaxSize()) {
+    val lazyListState = rememberLazyListState()
+    val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        onMove(from.index, to.index)
+    }
+
+    // Al cambiar el criterio o la dirección, volver al tope (no seguir el ítem anterior).
+    LaunchedEffect(sort, direction) {
+        lazyListState.scrollToItem(0)
+    }
+
+    LazyColumn(state = lazyListState, modifier = modifier.fillMaxSize()) {
         itemsIndexed(items = songs, key = { _, song -> song.id }) { index, song ->
-            SongRow(
-                song = song,
-                onClick = { onSongClick(index) },
-            )
-            HorizontalDivider()
+            if (reorderable) {
+                ReorderableItem(reorderState, key = song.id) { isDragging ->
+                    Surface(shadowElevation = if (isDragging) 6.dp else 0.dp) {
+                        Column {
+                            SongRow(
+                                song = song,
+                                onClick = { onSongClick(index) },
+                                modifier = Modifier.longPressDraggableHandle(),
+                            )
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            } else {
+                SongRow(
+                    song = song,
+                    onClick = { onSongClick(index) },
+                )
+                HorizontalDivider()
+            }
         }
     }
 }
@@ -317,6 +368,7 @@ private fun PlayerBar(
 @Composable
 private fun SortMenu(
     current: SortOrder,
+    direction: SortDirection,
     onSortSelected: (SortOrder) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -324,9 +376,12 @@ private fun SortMenu(
         Text("Ordenar")
     }
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-        SortOption("Nombre", SortOrder.NAME, current) { onSortSelected(it); expanded = false }
-        SortOption("Duración", SortOrder.DURATION, current) { onSortSelected(it); expanded = false }
-        SortOption("Fecha de modificación", SortOrder.DATE_MODIFIED, current) {
+        SortOption("Nombre", SortOrder.NAME, current, direction) { onSortSelected(it); expanded = false }
+        SortOption("Duración", SortOrder.DURATION, current, direction) { onSortSelected(it); expanded = false }
+        SortOption("Fecha de modificación", SortOrder.DATE_MODIFIED, current, direction) {
+            onSortSelected(it); expanded = false
+        }
+        SortOption("Personalizado", SortOrder.CUSTOM, current, direction) {
             onSortSelected(it); expanded = false
         }
     }
@@ -337,10 +392,20 @@ private fun SortOption(
     label: String,
     order: SortOrder,
     current: SortOrder,
+    direction: SortDirection,
     onSelected: (SortOrder) -> Unit,
 ) {
+    val active = order == current
+    // Flecha a la izquierda del orden activo (↑ ascendente / ↓ descendente).
+    // CUSTOM es manual → marca simple. Los inactivos van con sangría para alinear.
+    val prefix = when {
+        !active -> "     "
+        order == SortOrder.CUSTOM -> "•  "
+        direction == SortDirection.ASC -> "↑  "
+        else -> "↓  "
+    }
     DropdownMenuItem(
-        text = { Text(if (order == current) "✓  $label" else label) },
+        text = { Text("$prefix$label") },
         onClick = { onSelected(order) },
     )
 }
