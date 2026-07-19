@@ -95,8 +95,8 @@ com.tecnozoni.reproductor/
 
 ### Pasos
 ```bash
-git clone https://github.com/TecnoZoni/Reproductor.git
-cd Reproductor
+git clone https://github.com/TecnoZoni/reproductor-v1.0.git
+cd reproductor-v1.0
 ```
 1. Abrí el proyecto en Android Studio y hacé **Sync** (baja las dependencias; la primera vez tarda).
 2. Conectá un dispositivo (o iniciá un emulador) y apretá **Run ▶️**.
